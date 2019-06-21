@@ -45,14 +45,16 @@ public class FingerprintAuthenticationDialogFragment extends DialogFragment
     private static final int REQUEST_CODE_CONFIRM_DEVICE_CREDENTIALS = 1;
 
     private Button mCancelButton;
+    private Button mSecondDialogButton;
     private View mFingerprintContent;
+    private boolean isAsymmetricSetup;
+    private boolean isAsymmetricSign;
 
     private Stage mStage = Stage.FINGERPRINT;
 
     private KeyguardManager mKeyguardManager;
     private FingerprintManager.CryptoObject mCryptoObject;
     private FingerprintUiHelper mFingerprintUiHelper;
-    private FingerprintAuth mFingerPrintAuth;
     FingerprintUiHelper.FingerprintUiHelperBuilder mFingerprintUiHelperBuilder;
 
     public FingerprintAuthenticationDialogFragment() {
@@ -76,9 +78,12 @@ public class FingerprintAuthenticationDialogFragment extends DialogFragment
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         Bundle args = getArguments();
-        int dialogMode = args.getInt("dialogMode");
-        String message = args.getString("dialogMessage");
-        Log.d(TAG, "dialogMode: " + dialogMode);
+        boolean disableBackup = args.getBoolean("disableBackup");
+        isAsymmetricSetup = args.getBoolean("setupAsymmetric", false);
+        isAsymmetricSign = args.getBoolean("asymmetricEncryption", false);
+        Log.d(TAG, "disableBackup: " + disableBackup);
+        Log.d(TAG, "isAsymmetricSetup: " + isAsymmetricSetup);
+        Log.d(TAG, "isAsymmetricSign: " + isAsymmetricSign);
 
         int fingerprint_auth_dialog_title_id = getResources()
                 .getIdentifier("fingerprint_auth_dialog_title", "string",
@@ -90,10 +95,6 @@ public class FingerprintAuthenticationDialogFragment extends DialogFragment
         View v = inflater.inflate(fingerprint_dialog_container_id, container, false);
         int cancel_button_id = getResources()
                 .getIdentifier("cancel_button", "id", FingerprintAuth.packageName);
-
-        TextView description =  (TextView) v.findViewById(getResources()
-                .getIdentifier("fingerprint_description", "id", FingerprintAuth.packageName));
-        description.setText(message);
         mCancelButton = (Button) v.findViewById(cancel_button_id);
         mCancelButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -103,6 +104,18 @@ public class FingerprintAuthenticationDialogFragment extends DialogFragment
             }
         });
 
+        int second_dialog_button_id = getResources()
+                .getIdentifier("second_dialog_button", "id", FingerprintAuth.packageName);
+        mSecondDialogButton = (Button) v.findViewById(second_dialog_button_id);
+        if (disableBackup) {
+            mSecondDialogButton.setVisibility(View.GONE);
+        }
+        mSecondDialogButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                goToBackup();
+            }
+        });
         int fingerprint_container_id = getResources()
                 .getIdentifier("fingerprint_container", "id", FingerprintAuth.packageName);
         mFingerprintContent = v.findViewById(fingerprint_container_id);
@@ -120,6 +133,11 @@ public class FingerprintAuthenticationDialogFragment extends DialogFragment
                 (TextView) v.findViewById(fingerprint_status_id), this);
         updateStage();
 
+        // If fingerprint authentication is not available, switch immediately to the backup
+        // (password) screen.
+        if (!mFingerprintUiHelper.isFingerprintAuthAvailable()) {
+            goToBackup();
+        }
         return v;
     }
 
@@ -154,7 +172,10 @@ public class FingerprintAuthenticationDialogFragment extends DialogFragment
      * available or the user chooses to use the password authentication method by pressing the
      * button. This can also happen when the user had too many fingerprint attempts.
      */
-
+    private void goToBackup() {
+        mStage = Stage.BACKUP;
+        updateStage();
+    }
 
     private void updateStage() {
         int cancel_id = getResources()
@@ -162,7 +183,28 @@ public class FingerprintAuthenticationDialogFragment extends DialogFragment
         switch (mStage) {
             case FINGERPRINT:
                 mCancelButton.setText(cancel_id);
+                int use_backup_id = getResources()
+                        .getIdentifier("use_backup", "string", FingerprintAuth.packageName);
+                mSecondDialogButton.setText(use_backup_id);
                 mFingerprintContent.setVisibility(View.VISIBLE);
+                break;
+            case NEW_FINGERPRINT_ENROLLED:
+                // Intentional fall through
+            case BACKUP:
+                if (mStage == Stage.NEW_FINGERPRINT_ENROLLED) {
+
+                }
+                if (!mKeyguardManager.isKeyguardSecure()) {
+                    // Show a message that the user hasn't set up a lock screen.
+                    int secure_lock_screen_required_id = getResources()
+                            .getIdentifier("secure_lock_screen_required", "string",
+                                    FingerprintAuth.packageName);
+                    Toast.makeText(getContext(),
+                            getString(secure_lock_screen_required_id),
+                            Toast.LENGTH_LONG).show();
+                    return;
+                }
+                showAuthenticationScreen();
                 break;
         }
     }
@@ -181,7 +223,13 @@ public class FingerprintAuthenticationDialogFragment extends DialogFragment
         if (requestCode == REQUEST_CODE_CONFIRM_DEVICE_CREDENTIALS) {
             // Challenge completed, proceed with using cipher
             if (resultCode == getActivity().RESULT_OK) {
-                mFingerPrintAuth.onAuthenticated(false /* used backup */);
+                if (isAsymmetricSetup) {
+                    FingerprintAuth.onSuccessfulAsymmetricSetup();
+                } else if (isAsymmetricSign) {
+                    FingerprintAuth.onAuthenticatedWithAsymmetricKeys();
+                } else {
+                    FingerprintAuth.onAuthenticated(false /* used backup */);
+                }
             } else {
                 // The user canceled or didn’t complete the lock screen
                 // operation. Go to error/cancellation flow.
@@ -195,27 +243,25 @@ public class FingerprintAuthenticationDialogFragment extends DialogFragment
     public void onAuthenticated() {
         // Callback from FingerprintUiHelper. Let the activity know that authentication was
         // successful.
-        mFingerPrintAuth.onAuthenticated(true /* withFingerprint */);
+        if (isAsymmetricSetup) {
+            FingerprintAuth.onSuccessfulAsymmetricSetup();
+        } else if (isAsymmetricSign) {
+            FingerprintAuth.onAuthenticatedWithAsymmetricKeys();
+        } else {
+            FingerprintAuth.onAuthenticated(true /* withFingerprint */);
+        }
         dismiss();
     }
 
     @Override
     public void onError() {
-
+        goToBackup();
     }
 
     @Override
     public void onCancel(DialogInterface dialog) {
         super.onCancel(dialog);
         FingerprintAuth.onCancelled();
-    }
-
-    public FingerprintAuth getmFingerPrintAuth() {
-        return mFingerPrintAuth;
-    }
-
-    public void setmFingerPrintAuth(FingerprintAuth mFingerPrintAuth) {
-        this.mFingerPrintAuth = mFingerPrintAuth;
     }
 
     /**

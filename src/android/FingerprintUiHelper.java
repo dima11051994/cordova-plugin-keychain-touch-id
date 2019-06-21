@@ -134,7 +134,7 @@ public class FingerprintUiHelper extends FingerprintManager.AuthenticationCallba
                 .getIdentifier("ic_fingerprint_success", "drawable", FingerprintAuth.packageName);
         mIcon.setImageResource(ic_fingerprint_success_id);
         int success_color_id = mContext.getResources()
-                .getIdentifier("kc_success_color", "color", FingerprintAuth.packageName);
+                .getIdentifier("success_color", "color", FingerprintAuth.packageName);
         mErrorTextView.setTextColor(
                 mErrorTextView.getResources().getColor(success_color_id, null));
         int fingerprint_success_id = mContext.getResources()
@@ -155,7 +155,7 @@ public class FingerprintUiHelper extends FingerprintManager.AuthenticationCallba
         mIcon.setImageResource(ic_fingerprint_error_id);
         mErrorTextView.setText(error);
         int warning_color_id = mContext.getResources()
-                .getIdentifier("kc_warning_color", "color", FingerprintAuth.packageName);
+                .getIdentifier("warning_color", "color", FingerprintAuth.packageName);
         mErrorTextView.setTextColor(
                 mErrorTextView.getResources().getColor(warning_color_id, null));
         mErrorTextView.removeCallbacks(mResetErrorTextRunnable);
@@ -166,7 +166,7 @@ public class FingerprintUiHelper extends FingerprintManager.AuthenticationCallba
         @Override
         public void run() {
             int hint_color_id = mContext.getResources()
-                    .getIdentifier("kc_hint_color", "color", FingerprintAuth.packageName);
+                    .getIdentifier("hint_color", "color", FingerprintAuth.packageName);
             mErrorTextView.setTextColor(
                     mErrorTextView.getResources().getColor(hint_color_id, null));
             int fingerprint_hint_id = mContext.getResources()
