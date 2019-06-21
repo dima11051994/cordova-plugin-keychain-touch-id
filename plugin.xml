@@ -38,7 +38,7 @@
             <clobbers target="FingerprintAuth" />
         </js-module>
         <config-file target="res/xml/config.xml" parent="/*">
-            <feature name="TouchID" >
+            <feature name="FingerprintAuth" >
                 <param name="android-package" value="com.cordova.plugin.android.fingerprintauth.FingerprintAuth"/>
             </feature>
         </config-file>
